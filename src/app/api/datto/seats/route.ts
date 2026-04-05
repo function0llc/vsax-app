@@ -39,14 +39,26 @@ export async function GET(request: NextRequest) {
     // Handle different response formats - some APIs return array directly, some wrap in items
     const seats = Array.isArray(data) ? data : (data.items || [])
 
+    // Debug: Log raw API response
+    console.log('[/api/datto/seats] Raw Datto response sample:', JSON.stringify(seats[0], null, 2))
+
     await Promise.all(
       seats.map((seat: { 
         id?: string
         seatId?: string
         emailAddress?: string
+        email?: string
+        userEmail?: string
+        firstName?: string
+        lastName?: string
         seatType?: string
+        type?: string
         backupStatus?: string
+        status?: string
+        protectionStatus?: string
         lastBackupTime?: string
+        lastBackup?: string
+        lastBackupAt?: string
       }) => {
         const seatId = seat.id || seat.seatId
         
@@ -55,21 +67,27 @@ export async function GET(request: NextRequest) {
           return Promise.resolve()
         }
 
+        // Handle various possible field names from Datto API
+        const email = seat.emailAddress || seat.email || seat.userEmail || seatId
+        const seatType = seat.seatType ?? seat.type ?? null
+        const lastBackupStatus = seat.backupStatus ?? seat.status ?? seat.protectionStatus ?? null
+        const lastBackupTime = seat.lastBackupTime ?? seat.lastBackup ?? seat.lastBackupAt ?? null
+
         return prisma.backupSeat.upsert({
           where: { dattoSeatId: seatId },
           update: {
-            userEmail: seat.emailAddress || seatId,
-            seatType: seat.seatType ?? null,
-            lastBackupStatus: seat.backupStatus ?? null,
-            lastBackupAt: seat.lastBackupTime ? new Date(seat.lastBackupTime) : null,
+            userEmail: email,
+            seatType,
+            lastBackupStatus,
+            lastBackupAt: lastBackupTime ? new Date(lastBackupTime) : null,
           },
           create: {
             dattoSeatId: seatId,
             domainId: domain.id,
-            userEmail: seat.emailAddress || seatId,
-            seatType: seat.seatType ?? null,
-            lastBackupStatus: seat.backupStatus ?? null,
-            lastBackupAt: seat.lastBackupTime ? new Date(seat.lastBackupTime) : null,
+            userEmail: email,
+            seatType,
+            lastBackupStatus,
+            lastBackupAt: lastBackupTime ? new Date(lastBackupTime) : null,
           },
         })
       })
