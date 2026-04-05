@@ -21,29 +21,47 @@ export async function GET() {
     const client = new VsaxClient(cred.baseUrl, tokenId, tokenSecret)
     const { Data: notifications } = await client.getNotifications()
 
+    // Log first notification to debug field names
+    if (notifications.length > 0) {
+      console.log('[/api/vsax/alerts] Sample notification:', JSON.stringify(notifications[0], null, 2))
+    }
+
     await Promise.all(
-      notifications.map((notification) =>
-        prisma.alert.upsert({
-          where: { sourceApi_externalId: { sourceApi: 'vsax', externalId: notification.Identifier } },
+      notifications.map((notification) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const n = notification as any
+        // VSA X API returns: Id (number), Message, DateTime, Priority
+        const externalId = String(n.Id ?? n.Identifier ?? n.id ?? n.NotificationId)
+        if (!externalId || externalId === 'undefined') {
+          console.warn('[/api/vsax/alerts] Skipping notification with no identifier:', notification)
+          return Promise.resolve()
+        }
+        const title = n.Message ?? n.Title ?? 'Untitled Alert'
+        const severity = normaliseSeverity(n.Priority ?? n.Severity ?? 'normal')
+        const triggeredAt = n.DateTime ? new Date(n.DateTime) : (n.CreatedOn ? new Date(n.CreatedOn) : new Date())
+        const isResolved = n.IsRead ?? false
+
+        return prisma.alert.upsert({
+          where: { sourceApi_externalId: { sourceApi: 'vsax', externalId } },
           update: {
-            severity: normaliseSeverity(notification.Severity),
-            title: notification.Title ?? 'Untitled Alert',
-            description: notification.Description ?? null,
-            status: notification.IsRead ? 'resolved' : 'open',
-            resolvedAt: notification.IsRead ? new Date() : null,
+            severity,
+            title,
+            description: n.Description ?? null,
+            status: isResolved ? 'resolved' : 'open',
+            resolvedAt: isResolved ? new Date() : null,
           },
           create: {
             sourceApi: 'vsax',
-            externalId: notification.Identifier,
-            severity: normaliseSeverity(notification.Severity),
-            title: notification.Title ?? 'Untitled Alert',
-            description: notification.Description ?? null,
-            status: notification.IsRead ? 'resolved' : 'open',
-            triggeredAt: notification.CreatedOn ? new Date(notification.CreatedOn) : new Date(),
-            resolvedAt: notification.IsRead ? new Date() : null,
+            externalId,
+            severity,
+            title,
+            description: n.Description ?? null,
+            status: isResolved ? 'resolved' : 'open',
+            triggeredAt,
+            resolvedAt: isResolved ? new Date() : null,
           },
         })
-      )
+      })
     )
 
     const alerts = await prisma.alert.findMany({
