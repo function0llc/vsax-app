@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String?
+  hashedPassword String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model ApiCredential {
+  id                 String   @id @default(cuid())
+  provider           String   // "vsax" | "datto"
+  label              String
+  encryptedApiKey    String
+  encryptedApiSecret String?
+  baseUrl            String
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([provider, label])
+}
+
+model Device {
+  id           String    @id @default(cuid())
+  vsaxDeviceId String    @unique
+  hostname     String
+  osType       String?
+  status       String    @default("unknown")
+  agentVersion String?
+  orgName      String?
+  lastSeen     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  alerts Alert[]
+}
+
+model BackupDomain {
+  id             String    @id @default(cuid())
+  dattoDomainId  String    @unique
+  domainName     String
+  totalSeats     Int       @default(0)
+  protectedSeats Int       @default(0)
+  status         String    @default("unknown")
+  lastBackupAt   DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  seats BackupSeat[]
+}
+
+model BackupSeat {
+  id               String    @id @default(cuid())
+  dattoSeatId      String    @unique
+  domainId         String
+  userEmail        String
+  seatType         String?
+  lastBackupStatus String?
+  lastBackupAt     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  domain BackupDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+}
+
+model Alert {
+  id          String    @id @default(cuid())
+  sourceApi   String
+  externalId  String
+  severity    String    @default("info")
+  title       String
+  description String?
+  status      String    @default("open")
+  deviceId    String?
+  triggeredAt DateTime
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@unique([sourceApi, externalId])
+}
+
+model SyncLog {
+  id               String    @id @default(cuid())
+  syncType         String
+  status           String
+  recordsProcessed Int       @default(0)
+  errorMessage     String?
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+}

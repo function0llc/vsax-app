@@ -2,19 +2,15 @@ import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { DashboardShell } from '@/components/layout/DashboardShell'
-import { OverviewCards } from '@/components/dashboard/OverviewCards'
-import { RecentActivity } from '@/components/dashboard/RecentActivity'
+import { AlertList } from '@/components/alerts/AlertList'
 
-export default async function OverviewPage() {
+export default async function AlertsPage() {
   const session = await getServerSession(authOptions)
   if (!session) redirect('/login')
 
   return (
-    <DashboardShell title="Overview">
-      <div className="space-y-6">
-        <OverviewCards />
-        <RecentActivity />
-      </div>
+    <DashboardShell title="Alerts">
+      <AlertList />
     </DashboardShell>
   )
 }
