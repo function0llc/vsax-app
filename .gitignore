@@ -41,5 +41,5 @@ next-env.d.ts
 AGENTS.md
 .env.local
 *.code-workspace
-.kilo
+/.kilo
 /plans
