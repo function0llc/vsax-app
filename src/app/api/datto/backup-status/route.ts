@@ -29,8 +29,11 @@ export async function GET(request: NextRequest) {
 
     const client = new DattoClient(cred.baseUrl, cred.apiKey, cred.apiSecret)
     const data = await client.getBulkSeatStatus(domain.dattoDomainId)
+    
+    // Handle different response formats
+    const items = Array.isArray(data) ? data : (data.items || [])
 
-    return NextResponse.json(data)
+    return NextResponse.json({ items })
   } catch (error) {
     console.error('[/api/datto/backup-status] Error:', error)
     return NextResponse.json(

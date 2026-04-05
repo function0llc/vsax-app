@@ -34,28 +34,45 @@ export async function GET(request: NextRequest) {
     }
 
     const client = new DattoClient(cred.baseUrl, cred.apiKey, cred.apiSecret)
-    const { items: seats } = await client.getSeats(domain.dattoDomainId)
+    const data = await client.getSeats(domain.dattoDomainId)
+    
+    // Handle different response formats - some APIs return array directly, some wrap in items
+    const seats = Array.isArray(data) ? data : (data.items || [])
 
     await Promise.all(
-      seats.map((seat) =>
-        prisma.backupSeat.upsert({
-          where: { dattoSeatId: seat.id },
+      seats.map((seat: { 
+        id?: string
+        seatId?: string
+        emailAddress?: string
+        seatType?: string
+        backupStatus?: string
+        lastBackupTime?: string
+      }) => {
+        const seatId = seat.id || seat.seatId
+        
+        if (!seatId) {
+          console.warn('Skipping seat with no identifier:', seat)
+          return Promise.resolve()
+        }
+
+        return prisma.backupSeat.upsert({
+          where: { dattoSeatId: seatId },
           update: {
-            userEmail: seat.emailAddress ?? seat.id,
+            userEmail: seat.emailAddress || seatId,
             seatType: seat.seatType ?? null,
             lastBackupStatus: seat.backupStatus ?? null,
             lastBackupAt: seat.lastBackupTime ? new Date(seat.lastBackupTime) : null,
           },
           create: {
-            dattoSeatId: seat.id,
+            dattoSeatId: seatId,
             domainId: domain.id,
-            userEmail: seat.emailAddress ?? seat.id,
+            userEmail: seat.emailAddress || seatId,
             seatType: seat.seatType ?? null,
             lastBackupStatus: seat.backupStatus ?? null,
             lastBackupAt: seat.lastBackupTime ? new Date(seat.lastBackupTime) : null,
           },
         })
-      )
+      })
     )
 
     const backupSeats = await prisma.backupSeat.findMany({

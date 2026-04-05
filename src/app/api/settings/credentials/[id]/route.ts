@@ -79,7 +79,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     let success = false
 
     if (cred.provider === 'vsax') {
-      const client = new VsaxClient(decrypted.baseUrl, decrypted.apiKey)
+      const client = new VsaxClient(decrypted.baseUrl, decrypted.apiKey, decrypted.apiSecret ?? '')
       success = await client.testConnection()
     } else if (cred.provider === 'datto' && decrypted.apiSecret) {
       const client = new DattoClient(decrypted.baseUrl, decrypted.apiKey, decrypted.apiSecret)

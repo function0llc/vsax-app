@@ -55,6 +55,8 @@ export function ApiKeyForm({ onSuccess, onCancel }: ApiKeyFormProps) {
     mutation.mutate(form)
   }
 
+  const isVsax = form.provider === 'vsax'
+
   return (
     <Card>
       <form onSubmit={handleSubmit}>
@@ -91,37 +93,50 @@ export function ApiKeyForm({ onSuccess, onCancel }: ApiKeyFormProps) {
             <Label htmlFor="baseUrl">Base URL</Label>
             <Input
               id="baseUrl"
-              placeholder="https://your-instance.kaseya.com"
+              placeholder={isVsax ? "https://function0.vsax.net" : "https://api.datto.com"}
               value={form.baseUrl}
               onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
               required
             />
+            {isVsax && (
+              <p className="text-xs text-muted-foreground">
+                Example: https://function0.vsax.net (do not include /api/v3)
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="apiKey">API Key</Label>
+            <Label htmlFor="apiKey">
+              {isVsax ? 'Token ID' : 'API Key'}
+            </Label>
             <Input
               id="apiKey"
               type="password"
-              placeholder="Paste your API key"
+              placeholder={isVsax ? "Paste your VSA X Token ID" : "Paste your API key"}
               value={form.apiKey}
               onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
               required
             />
           </div>
 
-          {form.provider === 'datto' && (
-            <div className="space-y-2">
-              <Label htmlFor="apiSecret">API Secret</Label>
-              <Input
-                id="apiSecret"
-                type="password"
-                placeholder="Paste your API secret"
-                value={form.apiSecret}
-                onChange={(e) => setForm((f) => ({ ...f, apiSecret: e.target.value }))}
-              />
-            </div>
-          )}
+          <div className="space-y-2">
+            <Label htmlFor="apiSecret">
+              {isVsax ? 'Token Secret' : 'API Secret'}
+            </Label>
+            <Input
+              id="apiSecret"
+              type="password"
+              placeholder={isVsax ? "Paste your VSA X Token Secret" : "Paste your API secret (if required)"}
+              value={form.apiSecret}
+              onChange={(e) => setForm((f) => ({ ...f, apiSecret: e.target.value }))}
+              required={isVsax}
+            />
+            {isVsax && (
+              <p className="text-xs text-muted-foreground">
+                VSA X requires both Token ID and Token Secret for Basic Authentication
+              </p>
+            )}
+          </div>
         </CardContent>
 
         <CardFooter className="gap-2">

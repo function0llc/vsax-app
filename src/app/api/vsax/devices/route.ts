@@ -13,40 +13,45 @@ export async function GET() {
 
   try {
     const cred = await getDecryptedCredential('vsax')
-    const client = new VsaxClient(cred.baseUrl, cred.apiKey)
-    const { Result: agents } = await client.getAgents()
+    
+    // VSA X uses Token ID + Token Secret for Basic Auth
+    const tokenId = cred.apiKey
+    const tokenSecret = cred.apiSecret || ''
+    
+    const client = new VsaxClient(cred.baseUrl, tokenId, tokenSecret)
+    const { Data: devices } = await client.getDevices()
 
-    // Upsert all agents into the local DB for historical tracking
+    // Upsert all devices into the local DB for historical tracking
     await Promise.all(
-      agents.map((agent) =>
+      devices.map((device) =>
         prisma.device.upsert({
-          where: { vsaxDeviceId: agent.Id },
+          where: { vsaxDeviceId: device.Identifier },
           update: {
-            hostname: agent.ComputerName,
-            osType: agent.OSType ?? null,
-            status: normaliseStatus(agent.AgentStatus),
-            agentVersion: agent.AgentVersion ?? null,
-            orgName: agent.OrganizationName ?? null,
-            lastSeen: agent.LastSeenOnline ? new Date(agent.LastSeenOnline) : null,
+            hostname: device.Name,
+            osType: null, // Basic device list doesn't include OS type, would need to fetch details
+            status: 'unknown', // Basic list doesn't include online status
+            agentVersion: null,
+            orgName: device.OrganizationName ?? null,
+            lastSeen: new Date(),
           },
           create: {
-            vsaxDeviceId: agent.Id,
-            hostname: agent.ComputerName,
-            osType: agent.OSType ?? null,
-            status: normaliseStatus(agent.AgentStatus),
-            agentVersion: agent.AgentVersion ?? null,
-            orgName: agent.OrganizationName ?? null,
-            lastSeen: agent.LastSeenOnline ? new Date(agent.LastSeenOnline) : null,
+            vsaxDeviceId: device.Identifier,
+            hostname: device.Name,
+            osType: null,
+            status: 'unknown',
+            agentVersion: null,
+            orgName: device.OrganizationName ?? null,
+            lastSeen: new Date(),
           },
         })
       )
     )
 
-    const devices = await prisma.device.findMany({ orderBy: { hostname: 'asc' } })
+    const dbDevices = await prisma.device.findMany({ orderBy: { hostname: 'asc' } })
 
     // Serialise Dates to ISO strings to match the Device API type
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return NextResponse.json(devices as any)
+    return NextResponse.json(dbDevices as any)
   } catch (error) {
     console.error('[/api/vsax/devices] Error:', error)
     return NextResponse.json(
@@ -54,13 +59,4 @@ export async function GET() {
       { status: 500 }
     )
   }
-}
-
-function normaliseStatus(status?: string): string {
-  if (!status) return 'unknown'
-  const s = status.toLowerCase()
-  if (s === 'online' || s === 'active') return 'online'
-  if (s === 'offline') return 'offline'
-  if (s === 'warning') return 'warning'
-  return 'unknown'
 }

@@ -21,29 +21,54 @@ export async function GET() {
     }
 
     const client = new DattoClient(cred.baseUrl, cred.apiKey, cred.apiSecret)
-    const { items: domains } = await client.getDomains()
+    const data = await client.getDomains()
+    
+    // Handle different response formats - some APIs return array directly, some wrap in items
+    const domains = Array.isArray(data) ? data : (data.items || [])
+
+    // Log first domain to debug
+    if (domains.length > 0) {
+      console.log('First domain from Datto:', JSON.stringify(domains[0], null, 2))
+    }
 
     await Promise.all(
-      domains.map((domain) =>
-        prisma.backupDomain.upsert({
-          where: { dattoDomainId: domain.id },
+      domains.map((domain: { 
+        id?: string
+        domain?: string
+        externalSubscriptionId?: string
+        name?: string
+        totalSeats?: number
+        protectedSeats?: number
+        status?: string
+        lastBackupTime?: string
+      }) => {
+        // Datto API uses 'domain' or 'externalSubscriptionId' as identifier, not 'id'
+        const domainId = domain.id || domain.domain || domain.externalSubscriptionId
+        
+        if (!domainId) {
+          console.warn('Skipping domain with no identifier:', domain)
+          return Promise.resolve()
+        }
+
+        return prisma.backupDomain.upsert({
+          where: { dattoDomainId: domainId },
           update: {
-            domainName: domain.name ?? domain.domain ?? domain.id,
+            domainName: domain.name || domain.domain || domainId,
             totalSeats: domain.totalSeats ?? 0,
             protectedSeats: domain.protectedSeats ?? 0,
             status: domain.status ?? 'unknown',
             lastBackupAt: domain.lastBackupTime ? new Date(domain.lastBackupTime) : null,
           },
           create: {
-            dattoDomainId: domain.id,
-            domainName: domain.name ?? domain.domain ?? domain.id,
+            dattoDomainId: domainId,
+            domainName: domain.name || domain.domain || domainId,
             totalSeats: domain.totalSeats ?? 0,
             protectedSeats: domain.protectedSeats ?? 0,
             status: domain.status ?? 'unknown',
             lastBackupAt: domain.lastBackupTime ? new Date(domain.lastBackupTime) : null,
           },
         })
-      )
+      })
     )
 
     const backupDomains = await prisma.backupDomain.findMany({

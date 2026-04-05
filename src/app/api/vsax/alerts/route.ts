@@ -13,29 +13,34 @@ export async function GET() {
 
   try {
     const cred = await getDecryptedCredential('vsax')
-    const client = new VsaxClient(cred.baseUrl, cred.apiKey)
-    const { Result: apiAlerts } = await client.getAlerts()
+    
+    // VSA X uses Token ID + Token Secret for Basic Auth
+    const tokenId = cred.apiKey
+    const tokenSecret = cred.apiSecret || ''
+    
+    const client = new VsaxClient(cred.baseUrl, tokenId, tokenSecret)
+    const { Data: notifications } = await client.getNotifications()
 
     await Promise.all(
-      apiAlerts.map((alert) =>
+      notifications.map((notification) =>
         prisma.alert.upsert({
-          where: { sourceApi_externalId: { sourceApi: 'vsax', externalId: alert.Id } },
+          where: { sourceApi_externalId: { sourceApi: 'vsax', externalId: notification.Identifier } },
           update: {
-            severity: normaliseSeverity(alert.Severity),
-            title: alert.Title ?? 'Untitled Alert',
-            description: alert.Description ?? null,
-            status: alert.Status?.toLowerCase() === 'resolved' ? 'resolved' : 'open',
-            resolvedAt: alert.ResolvedOn ? new Date(alert.ResolvedOn) : null,
+            severity: normaliseSeverity(notification.Severity),
+            title: notification.Title ?? 'Untitled Alert',
+            description: notification.Description ?? null,
+            status: notification.IsRead ? 'resolved' : 'open',
+            resolvedAt: notification.IsRead ? new Date() : null,
           },
           create: {
             sourceApi: 'vsax',
-            externalId: alert.Id,
-            severity: normaliseSeverity(alert.Severity),
-            title: alert.Title ?? 'Untitled Alert',
-            description: alert.Description ?? null,
-            status: alert.Status?.toLowerCase() === 'resolved' ? 'resolved' : 'open',
-            triggeredAt: alert.CreatedOn ? new Date(alert.CreatedOn) : new Date(),
-            resolvedAt: alert.ResolvedOn ? new Date(alert.ResolvedOn) : null,
+            externalId: notification.Identifier,
+            severity: normaliseSeverity(notification.Severity),
+            title: notification.Title ?? 'Untitled Alert',
+            description: notification.Description ?? null,
+            status: notification.IsRead ? 'resolved' : 'open',
+            triggeredAt: notification.CreatedOn ? new Date(notification.CreatedOn) : new Date(),
+            resolvedAt: notification.IsRead ? new Date() : null,
           },
         })
       )
@@ -57,8 +62,14 @@ export async function GET() {
   }
 }
 
-function normaliseSeverity(severity?: string): string {
+function normaliseSeverity(severity: string): string {
   const s = severity?.toLowerCase() ?? 'info'
-  if (['critical', 'high', 'medium', 'low', 'info'].includes(s)) return s
+  if (['critical', 'elevated', 'normal', 'low'].includes(s)) {
+    // Map VSA X severities to our standard
+    if (s === 'critical') return 'critical'
+    if (s === 'elevated') return 'high'
+    if (s === 'normal') return 'medium'
+    return 'low'
+  }
   return 'info'
 }

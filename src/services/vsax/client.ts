@@ -1,13 +1,21 @@
 import { VSAX_ENDPOINTS } from './endpoints'
-import type { VsaxAgentsResponse, VsaxAlertsResponse, VsaxOrganizationsResponse } from './types'
+import type { VsaxDevicesResponse, VsaxNotificationsResponse, VsaxOrganizationsResponse, VsaxDevice } from './types'
 
 export class VsaxClient {
   private baseUrl: string
-  private apiKey: string
+  private tokenId: string
+  private tokenSecret: string
 
-  constructor(baseUrl: string, apiKey: string) {
+  constructor(baseUrl: string, tokenId: string, tokenSecret: string) {
     this.baseUrl = baseUrl.replace(/\/$/, '')
-    this.apiKey = apiKey
+    this.tokenId = tokenId
+    this.tokenSecret = tokenSecret
+  }
+
+  private getAuthHeader(): string {
+    // VSA X uses Basic Auth with Token ID and Token Secret
+    const credentials = Buffer.from(`${this.tokenId}:${this.tokenSecret}`).toString('base64')
+    return `Basic ${credentials}`
   }
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -16,8 +24,9 @@ export class VsaxClient {
     const response = await fetch(url, {
       ...options,
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
+        'Authorization': this.getAuthHeader(),
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         ...options?.headers,
       },
     })
@@ -29,12 +38,16 @@ export class VsaxClient {
     return response.json() as Promise<T>
   }
 
-  async getAgents(): Promise<VsaxAgentsResponse> {
-    return this.request<VsaxAgentsResponse>(VSAX_ENDPOINTS.AGENTS)
+  async getDevices(): Promise<VsaxDevicesResponse> {
+    return this.request<VsaxDevicesResponse>(VSAX_ENDPOINTS.DEVICES)
   }
 
-  async getAlerts(): Promise<VsaxAlertsResponse> {
-    return this.request<VsaxAlertsResponse>(VSAX_ENDPOINTS.ALERTS)
+  async getDevice(id: string): Promise<{ Data: VsaxDevice }> {
+    return this.request<{ Data: VsaxDevice }>(VSAX_ENDPOINTS.DEVICE_BY_ID(id))
+  }
+
+  async getNotifications(): Promise<VsaxNotificationsResponse> {
+    return this.request<VsaxNotificationsResponse>(VSAX_ENDPOINTS.NOTIFICATIONS)
   }
 
   async getOrganizations(): Promise<VsaxOrganizationsResponse> {
